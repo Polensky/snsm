@@ -57,7 +57,11 @@ func (i noteItem) FilterValue() string {
 }
 
 // Implement list.Item interface
-func (i noteItem) Title() string       { return i.filename }
+func (i noteItem) Title() string {
+	// Return filename without .md extension
+	return strings.TrimSuffix(i.filename, ".md")
+}
+
 func (i noteItem) Description() string { return i.tags }
 
 type model struct {
@@ -74,7 +78,7 @@ type model struct {
 
 func initialModel() model {
 	ti := textinput.New()
-	ti.Placeholder = "Enter filename (with .md extension)"
+	ti.Placeholder = "Enter filename (without .md extension)"
 	ti.Focus()
 	ti.CharLimit = 100
 	ti.Width = 40
@@ -146,10 +150,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Create and open the new file
 				filename := m.textInput.Value()
 				if filename != "" {
-					// Add .md extension if not present
-					if !strings.HasSuffix(strings.ToLower(filename), ".md") {
-						filename += ".md"
-					}
+					// Remove any .md extension the user might have added
+					filename = strings.TrimSuffix(filename, ".md")
+					// Always add .md extension
+					filename += ".md"
+					
 					m.choice = filename
 					// Switch to tag input
 					m.mode = modeTagInput
@@ -201,7 +206,7 @@ func (m model) View() string {
 	case modeInput:
 		return fmt.Sprintf(
 			"\n\n  %s\n\n  %s\n\n",
-			"Enter the filename for your new note:",
+			"Enter the filename for your new note (without .md extension):",
 			m.textInput.View(),
 		) + "  (press ESC to cancel)"
 	case modeTagInput:
