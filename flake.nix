@@ -15,7 +15,7 @@
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
         pname = "simple-notes";
-        version = "0.5.0";
+        version = "0.6.0";
       in {
         packages.default = pkgs.buildGoModule {
           inherit pname version;

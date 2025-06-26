@@ -27,13 +27,13 @@ var (
 	quitTextStyle     = lipgloss.NewStyle().Margin(1, 0, 2, 4)
 	inputStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 	
-	// Pill styling
-	tagPillStyle      = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("255"))
-	selectedTagPillStyle = lipgloss.NewStyle().Background(lipgloss.Color("99")).Foreground(lipgloss.Color("255")).Bold(true)
+	// Pill styling - changed to blue tones
+	tagPillStyle      = lipgloss.NewStyle().Background(lipgloss.Color("27")).Foreground(lipgloss.Color("255"))
+	selectedTagPillStyle = lipgloss.NewStyle().Background(lipgloss.Color("39")).Foreground(lipgloss.Color("255")).Bold(true)
 	
 	// Circle styling - foreground matches the background of the pill
-	circleStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("62"))
-	selectedCircleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("99"))
+	circleStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("27"))
+	selectedCircleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
 )
 
 const (
