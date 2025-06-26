@@ -8,7 +8,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -22,7 +24,26 @@ var (
 	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
 	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
 	quitTextStyle     = lipgloss.NewStyle().Margin(1, 0, 2, 4)
+	inputStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 )
+
+const (
+	modeList = iota
+	modeInput
+)
+
+// Custom keymaps for our list
+type listKeyMap struct {
+	createNote key.Binding
+}
+
+// Define our custom keybindings
+var customListKeys = listKeyMap{
+	createNote: key.NewBinding(
+		key.WithKeys("n"),
+		key.WithHelp("n", "new note"),
+	),
+}
 
 type noteItem struct {
 	filename string
@@ -39,10 +60,27 @@ func (i noteItem) Title() string       { return i.filename }
 func (i noteItem) Description() string { return i.tags }
 
 type model struct {
-	list     list.Model
-	items    []noteItem
-	choice   string
-	quitting bool
+	list      list.Model
+	items     []noteItem
+	choice    string
+	quitting  bool
+	mode      int
+	textInput textinput.Model
+	keys      listKeyMap
+}
+
+func initialModel() model {
+	ti := textinput.New()
+	ti.Placeholder = "Enter filename (with .md extension)"
+	ti.Focus()
+	ti.CharLimit = 100
+	ti.Width = 40
+	
+	return model{
+		textInput: ti,
+		mode:      modeList,
+		keys:      customListKeys,
+	}
 }
 
 func (m model) Init() tea.Cmd {
@@ -50,46 +88,108 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch keypress := msg.String(); keypress {
-		case "q", "ctrl+c":
-			m.quitting = true
-			return m, tea.Quit
-
-		case "enter":
-			i, ok := m.list.SelectedItem().(noteItem)
-			if ok {
-				m.choice = i.filename
+	var cmd tea.Cmd
+	
+	switch m.mode {
+	case modeList:
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch keypress := msg.String(); keypress {
+			case "q", "ctrl+c":
+				m.quitting = true
 				return m, tea.Quit
+
+			case "enter":
+				i, ok := m.list.SelectedItem().(noteItem)
+				if ok {
+					m.choice = i.filename
+					return m, tea.Quit
+				}
+				
+			case "n":
+				// Enter new file creation mode
+				m.mode = modeInput
+				return m, textinput.Blink
+			}
+
+		case tea.WindowSizeMsg:
+			h, v := listHeight, msg.Height
+			if v <= h {
+				h = v - 1
+			}
+			m.list.SetHeight(h)
+			m.list.SetWidth(msg.Width)
+		}
+
+		m.list, cmd = m.list.Update(msg)
+		return m, cmd
+		
+	case modeInput:
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "esc":
+				// Return to list mode
+				m.mode = modeList
+				return m, nil
+				
+			case "enter":
+				// Create and open the new file
+				filename := m.textInput.Value()
+				if filename != "" {
+					// Add .md extension if not present
+					if !strings.HasSuffix(strings.ToLower(filename), ".md") {
+						filename += ".md"
+					}
+					m.choice = filename
+					return m, tea.Quit
+				}
 			}
 		}
-
-	case tea.WindowSizeMsg:
-		h, v := listHeight, msg.Height
-		if v <= h {
-			h = v - 1
-		}
-		m.list.SetHeight(h)
-		m.list.SetWidth(msg.Width)
+		
+		m.textInput, cmd = m.textInput.Update(msg)
+		return m, cmd
 	}
-
-	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	
+	return m, nil
 }
 
 func (m model) View() string {
-	if m.quitting || m.choice != "" {
+	if m.quitting {
 		return quitTextStyle.Render("Bye!")
 	}
-	return m.list.View()
+	
+	if m.choice != "" {
+		return quitTextStyle.Render("Bye!")
+	}
+	
+	switch m.mode {
+	case modeList:
+		return m.list.View()
+	case modeInput:
+		return fmt.Sprintf(
+			"\n\n  %s\n\n  %s\n\n",
+			"Enter the filename for your new note:",
+			m.textInput.View(),
+		) + "  (press ESC to cancel)"
+	}
+	
+	return ""
 }
 
 func openInEditor(filename string) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		return fmt.Errorf("EDITOR environment variable not set")
+	}
+
+	// Create file if it doesn't exist
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		file, err := os.Create(filename)
+		if err != nil {
+			return fmt.Errorf("failed to create file: %v", err)
+		}
+		file.Close()
 	}
 
 	cmd := exec.Command(editor, filename)
@@ -127,11 +227,27 @@ func main() {
 	// Change "item/items" to "note/notes" in status messages
 	l.SetStatusBarItemName("note", "notes")
 	
+	// Add additional key bindings to the help menu
+	l.AdditionalFullHelpKeys = func() []key.Binding {
+		return []key.Binding{
+			customListKeys.createNote,
+		}
+	}
+	
+	// Add additional active key bindings
+	l.AdditionalShortHelpKeys = func() []key.Binding {
+		return []key.Binding{
+			customListKeys.createNote,
+		}
+	}
+	
 	// Enable filter mode on startup
 	l.ShowFilter()
 	l.FilterInput.Focus() // Give focus to the filter input
 
-	m := model{list: l}
+	m := initialModel()
+	m.list = l
+	m.items = files
 	
 	p := tea.NewProgram(m)
 	finalModel, err := p.Run()
