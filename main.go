@@ -80,7 +80,7 @@ func initialModel() model {
 	ti.Width = 40
 	
 	tagInput := textinput.New()
-	tagInput.Placeholder = "Enter tags (e.g. +work +important +todo)"
+	tagInput.Placeholder = "Enter tags (e.g. work important todo)"
 	tagInput.CharLimit = 100
 	tagInput.Width = 40
 	
@@ -207,12 +207,28 @@ func (m model) View() string {
 	case modeTagInput:
 		return fmt.Sprintf(
 			"\n\n  %s\n\n  %s\n\n",
-			"Enter tags for your note (e.g. +work +important +todo):",
+			"Enter tags for your note (e.g. work important todo):",
 			m.tagInput.View(),
 		) + "  (press ESC to go back to filename)"
 	}
 	
 	return ""
+}
+
+func formatTagsWithPlus(tags string) string {
+	words := strings.Fields(tags)
+	tagWords := make([]string, 0)
+	
+	for _, word := range words {
+		// Only add + if it doesn't already have one
+		if !strings.HasPrefix(word, "+") {
+			tagWords = append(tagWords, "+" + word)
+		} else {
+			tagWords = append(tagWords, word)
+		}
+	}
+	
+	return strings.Join(tagWords, " ")
 }
 
 func openInEditor(filename, tags string) error {
@@ -229,8 +245,9 @@ func openInEditor(filename, tags string) error {
 	
 	// If tags were provided, write them as the first line
 	if tags != "" {
-		formattedTags := "// " + tags
-		file.WriteString(formattedTags + "\n")
+		// Format tags with + for each word
+		formattedTags := formatTagsWithPlus(tags)
+		file.WriteString("// " + formattedTags + "\n")
 	}
 	
 	file.Close()

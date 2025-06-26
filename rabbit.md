@@ -1,1 +1,1 @@
-// rabbit culture
+// +rabbit +culture
