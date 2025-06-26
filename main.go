@@ -30,6 +30,7 @@ var (
 const (
 	modeList = iota
 	modeInput
+	modeTagInput
 )
 
 // Custom keymaps for our list
@@ -60,13 +61,15 @@ func (i noteItem) Title() string       { return i.filename }
 func (i noteItem) Description() string { return i.tags }
 
 type model struct {
-	list      list.Model
-	items     []noteItem
-	choice    string
-	quitting  bool
-	mode      int
-	textInput textinput.Model
-	keys      listKeyMap
+	list         list.Model
+	items        []noteItem
+	choice       string
+	quitting     bool
+	mode         int
+	textInput    textinput.Model
+	tagInput     textinput.Model
+	keys         listKeyMap
+	newNoteTags  string
 }
 
 func initialModel() model {
@@ -76,8 +79,14 @@ func initialModel() model {
 	ti.CharLimit = 100
 	ti.Width = 40
 	
+	tagInput := textinput.New()
+	tagInput.Placeholder = "Enter tags (e.g. +work +important +todo)"
+	tagInput.CharLimit = 100
+	tagInput.Width = 40
+	
 	return model{
 		textInput: ti,
+		tagInput:  tagInput,
 		mode:      modeList,
 		keys:      customListKeys,
 	}
@@ -142,12 +151,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						filename += ".md"
 					}
 					m.choice = filename
-					return m, tea.Quit
+					// Switch to tag input
+					m.mode = modeTagInput
+					m.tagInput.Focus()
+					return m, textinput.Blink
 				}
 			}
 		}
 		
 		m.textInput, cmd = m.textInput.Update(msg)
+		return m, cmd
+		
+	case modeTagInput:
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "esc":
+				// Return to filename input
+				m.mode = modeInput
+				m.textInput.Focus()
+				return m, nil
+				
+			case "enter":
+				// Save the tags and exit
+				m.newNoteTags = m.tagInput.Value()
+				return m, tea.Quit
+			}
+		}
+		
+		m.tagInput, cmd = m.tagInput.Update(msg)
 		return m, cmd
 	}
 	
@@ -159,7 +191,7 @@ func (m model) View() string {
 		return quitTextStyle.Render("Bye!")
 	}
 	
-	if m.choice != "" {
+	if m.choice != "" && m.mode != modeTagInput && m.mode != modeInput {
 		return quitTextStyle.Render("Bye!")
 	}
 	
@@ -172,25 +204,36 @@ func (m model) View() string {
 			"Enter the filename for your new note:",
 			m.textInput.View(),
 		) + "  (press ESC to cancel)"
+	case modeTagInput:
+		return fmt.Sprintf(
+			"\n\n  %s\n\n  %s\n\n",
+			"Enter tags for your note (e.g. +work +important +todo):",
+			m.tagInput.View(),
+		) + "  (press ESC to go back to filename)"
 	}
 	
 	return ""
 }
 
-func openInEditor(filename string) error {
+func openInEditor(filename, tags string) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		return fmt.Errorf("EDITOR environment variable not set")
 	}
 
-	// Create file if it doesn't exist
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		file, err := os.Create(filename)
-		if err != nil {
-			return fmt.Errorf("failed to create file: %v", err)
-		}
-		file.Close()
+	// Create file if it doesn't exist, or open for writing if it does
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %v", err)
 	}
+	
+	// If tags were provided, write them as the first line
+	if tags != "" {
+		formattedTags := "// " + tags
+		file.WriteString(formattedTags + "\n")
+	}
+	
+	file.Close()
 
 	cmd := exec.Command(editor, filename)
 	cmd.Stdin = os.Stdin
@@ -259,7 +302,7 @@ func main() {
 	// Get the final model state
 	if m, ok := finalModel.(model); ok && m.choice != "" {
 		// We need to wait until the program has completely exited before running the editor
-		if err := openInEditor(m.choice); err != nil {
+		if err := openInEditor(m.choice, m.newNoteTags); err != nil {
 			fmt.Printf("Error opening file in editor: %v\n", err)
 			os.Exit(1)
 		}
