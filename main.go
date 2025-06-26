@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -14,8 +15,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
-const listHeight = 14
 
 var (
 	titleStyle        = lipgloss.NewStyle().MarginLeft(2).Foreground(lipgloss.Color("blue"))
@@ -97,7 +96,10 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return m.list.StartSpinner()
+	return tea.Batch(
+		m.list.StartSpinner(),
+		tea.EnterAltScreen,
+	)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -120,18 +122,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				
 			case "n":
-				// Enter new file creation mode
-				m.mode = modeInput
-				return m, textinput.Blink
+				// Only trigger new note creation if not filtering
+				if !m.list.SettingFilter() {
+					m.mode = modeInput
+					return m, textinput.Blink
+				}
 			}
 
 		case tea.WindowSizeMsg:
-			h, v := listHeight, msg.Height
-			if v <= h {
-				h = v - 1
-			}
+			// Use the full height of the terminal, minus 1 for status bar
+			h := msg.Height - 1
 			m.list.SetHeight(h)
 			m.list.SetWidth(msg.Width)
+			return m, nil
 		}
 
 		m.list, cmd = m.list.Update(msg)
@@ -236,6 +239,16 @@ func formatTagsWithPlus(tags string) string {
 	return strings.Join(tagWords, " ")
 }
 
+// Capitalize first letter of a string
+func capitalizeFirstLetter(s string) string {
+	if s == "" {
+		return ""
+	}
+	r := []rune(s)
+	r[0] = unicode.ToUpper(r[0])
+	return string(r)
+}
+
 func openInEditor(filename, tags string) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
@@ -248,12 +261,20 @@ func openInEditor(filename, tags string) error {
 		return fmt.Errorf("failed to create file: %v", err)
 	}
 	
+	// Extract the title from filename (without extension)
+	title := strings.TrimSuffix(filename, ".md")
+	// Capitalize the first letter of the title
+	title = capitalizeFirstLetter(title)
+	
 	// If tags were provided, write them as the first line
 	if tags != "" {
 		// Format tags with + for each word
 		formattedTags := formatTagsWithPlus(tags)
 		file.WriteString("// " + formattedTags + "\n")
 	}
+	
+	// Add the title as a markdown heading
+	file.WriteString("# " + title + "\n\n")
 	
 	file.Close()
 
@@ -314,7 +335,8 @@ func main() {
 	m.list = l
 	m.items = files
 	
-	p := tea.NewProgram(m)
+	// Use WithAltScreen to use the full terminal space
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	finalModel, err := p.Run()
 	if err != nil {
 		fmt.Printf("Error running program: %v\n", err)
