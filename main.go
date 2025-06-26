@@ -134,7 +134,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			h := msg.Height - 1
 			m.list.SetHeight(h)
 			m.list.SetWidth(msg.Width)
-			return m, nil
+			
+			// Return a command to redraw the UI after resize
+			return m, tea.ClearScreen
 		}
 
 		m.list, cmd = m.list.Update(msg)
