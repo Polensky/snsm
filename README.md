@@ -1,3 +1,4 @@
+// +readme 
 # Simple notes
 do you just need a note system that is organized with tags? This is the solution.
 
