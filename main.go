@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode"
@@ -73,9 +74,10 @@ type model struct {
 	tagInput     textinput.Model
 	keys         listKeyMap
 	newNoteTags  string
+	notesDir     string
 }
 
-func initialModel() model {
+func initialModel(notesDir string) model {
 	ti := textinput.New()
 	ti.Placeholder = "Enter filename (without .md extension)"
 	ti.Focus()
@@ -92,6 +94,7 @@ func initialModel() model {
 		tagInput:  tagInput,
 		mode:      modeList,
 		keys:      customListKeys,
+		notesDir:  notesDir,
 	}
 }
 
@@ -251,19 +254,32 @@ func capitalizeFirstLetter(s string) string {
 	return string(r)
 }
 
-func openInEditor(filename, tags string) error {
+// Expand ~ to home directory
+func expandTilde(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return path // Return original if we can't expand
+		}
+		return filepath.Join(homeDir, path[2:])
+	}
+	return path
+}
+
+func openInEditor(fullPath string, tags string) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		return fmt.Errorf("EDITOR environment variable not set")
 	}
 
 	// Create file if it doesn't exist, or open for writing if it does
-	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0644)
+	file, err := os.OpenFile(fullPath, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %v", err)
 	}
 	
 	// Extract the title from filename (without extension)
+	filename := filepath.Base(fullPath)
 	title := strings.TrimSuffix(filename, ".md")
 	// Capitalize the first letter of the title
 	title = capitalizeFirstLetter(title)
@@ -280,7 +296,7 @@ func openInEditor(filename, tags string) error {
 	
 	file.Close()
 
-	cmd := exec.Command(editor, filename)
+	cmd := exec.Command(editor, fullPath)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -289,14 +305,23 @@ func openInEditor(filename, tags string) error {
 }
 
 func main() {
-	files, err := findMarkdownFiles(".")
+	// Expand the path to the notes directory
+	notesDir := expandTilde("~/notes/")
+	
+	// Ensure the notes directory exists
+	if err := os.MkdirAll(notesDir, 0755); err != nil {
+		fmt.Printf("Error creating notes directory: %v\n", err)
+		os.Exit(1)
+	}
+	
+	files, err := findMarkdownFiles(notesDir)
 	if err != nil {
 		fmt.Printf("Error finding markdown files: %v\n", err)
 		os.Exit(1)
 	}
 
 	if len(files) == 0 {
-		fmt.Println("No markdown files found in the current directory.")
+		fmt.Printf("No markdown files found in %s\n", notesDir)
 		os.Exit(0)
 	}
 
@@ -307,7 +332,7 @@ func main() {
 
 	delegate := list.NewDefaultDelegate()
 	l := list.New(items, delegate, 0, 0)
-	l.Title = "Simple notes"
+	l.Title = fmt.Sprintf("Notes at %s", notesDir)
 	l.Styles.Title = titleStyle
 	l.Styles.PaginationStyle = paginationStyle
 	l.Styles.HelpStyle = helpStyle
@@ -333,7 +358,7 @@ func main() {
 	l.ShowFilter()
 	l.FilterInput.Focus() // Give focus to the filter input
 
-	m := initialModel()
+	m := initialModel(notesDir)
 	m.list = l
 	m.items = files
 	
@@ -347,8 +372,11 @@ func main() {
 	
 	// Get the final model state
 	if m, ok := finalModel.(model); ok && m.choice != "" {
+		// Create full file path in the notes directory
+		fullPath := filepath.Join(m.notesDir, m.choice)
+		
 		// We need to wait until the program has completely exited before running the editor
-		if err := openInEditor(m.choice, m.newNoteTags); err != nil {
+		if err := openInEditor(fullPath, m.newNoteTags); err != nil {
 			fmt.Printf("Error opening file in editor: %v\n", err)
 			os.Exit(1)
 		}
@@ -385,7 +413,8 @@ func findMarkdownFiles(dir string) ([]noteItem, error) {
 			tags := ""
 			
 			// Open file and read first line to extract tags
-			file, err := os.Open(filename)
+			filePath := filepath.Join(dir, filename)
+			file, err := os.Open(filePath)
 			if err == nil {
 				scanner := bufio.NewScanner(file)
 				if scanner.Scan() {
