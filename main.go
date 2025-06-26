@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,20 +19,110 @@ import (
 )
 
 var (
-	titleStyle        = lipgloss.NewStyle().MarginLeft(2).Foreground(lipgloss.Color("blue"))
+	titleStyle        = lipgloss.NewStyle().MarginLeft(2).Foreground(lipgloss.Color("white"))
 	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
 	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("green"))
 	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
 	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
 	quitTextStyle     = lipgloss.NewStyle().Margin(1, 0, 2, 4)
 	inputStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	
+	// Pill styling
+	tagPillStyle      = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("255"))
+	selectedTagPillStyle = lipgloss.NewStyle().Background(lipgloss.Color("99")).Foreground(lipgloss.Color("255")).Bold(true)
+	
+	// Circle styling - foreground matches the background of the pill
+	circleStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("62"))
+	selectedCircleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("99"))
 )
 
 const (
 	modeList = iota
 	modeInput
 	modeTagInput
+	
+	// Unicode half circles for pill styling
+	leftHalfCircle  = ""
+	rightHalfCircle = ""
 )
+
+// Custom item delegate for styling the list items
+type customItemDelegate struct {
+	list.DefaultDelegate
+}
+
+func NewCustomDelegate() list.ItemDelegate {
+	delegate := customItemDelegate{
+		DefaultDelegate: list.NewDefaultDelegate(),
+	}
+	
+	// Style base delegate
+	delegate.Styles.NormalTitle = delegate.Styles.NormalTitle.
+		Foreground(lipgloss.Color("255")) // White for unselected items
+	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
+		Foreground(lipgloss.Color("10")). // Bright green for selected items
+		Bold(true)
+	
+	// Clear description styles (we'll handle them in Render)
+	delegate.Styles.NormalDesc = lipgloss.NewStyle()
+	delegate.Styles.SelectedDesc = lipgloss.NewStyle()
+	
+	return delegate
+}
+
+// Override Render to customize the appearance of list items
+func (d customItemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	item, ok := listItem.(noteItem)
+	if !ok {
+		d.DefaultDelegate.Render(w, m, index, listItem)
+		return
+	}
+
+	isSelected := index == m.Index()
+	var title string
+	var tags string
+
+	if isSelected {
+		title = d.Styles.SelectedTitle.Render(item.Title())
+	} else {
+		title = d.Styles.NormalTitle.Render(item.Title())
+	}
+
+	// Format tags as pills
+	if item.tags != "" {
+		tagWords := strings.Fields(item.tags)
+		var formattedTags []string
+		
+		for _, tag := range tagWords {
+			// Remove + prefix if present
+			tagText := tag
+			if strings.HasPrefix(tagText, "+") {
+				tagText = tagText[1:]
+			}
+			
+			// Style each tag as a pill with matching circle foreground
+			if isSelected {
+				formattedTags = append(formattedTags, 
+					selectedCircleStyle.Render(leftHalfCircle) + 
+					selectedTagPillStyle.Render(tagText) + 
+					selectedCircleStyle.Render(rightHalfCircle))
+			} else {
+				formattedTags = append(formattedTags, 
+					circleStyle.Render(leftHalfCircle) + 
+					tagPillStyle.Render(tagText) + 
+					circleStyle.Render(rightHalfCircle))
+			}
+		}
+		
+		tags = strings.Join(formattedTags, " ")
+	}
+
+	// Write title and tags with spacing
+	fmt.Fprintf(w, "%s\n", title)
+	if tags != "" {
+		fmt.Fprintf(w, "  %s", tags)
+	}
+}
 
 // Custom keymaps for our list
 type listKeyMap struct {
@@ -330,7 +421,7 @@ func main() {
 		items[i] = fileInfo
 	}
 
-	delegate := list.NewDefaultDelegate()
+	delegate := NewCustomDelegate()
 	l := list.New(items, delegate, 0, 0)
 	l.Title = fmt.Sprintf("Notes at %s", notesDir)
 	l.Styles.Title = titleStyle
