@@ -1,6 +1,7 @@
 # snsm - Simple Notes for Simple Man
 I'm a simple man with simple need. I just needed a simple program to open my notes (in markdown) and search them with tags.
 
+![Demo](./snsm.gif)
 ## Usage
 Just start `snsm` and enter the tags you're searching for. Selecting one will open it in your favorite `$EDITOR`. 
 
