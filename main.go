@@ -396,9 +396,29 @@ func openInEditor(fullPath string, tags string) error {
 		return fmt.Errorf("EDITOR environment variable not set")
 	}
 
+	// Save the current working directory to return to it later
+	originalDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %v", err)
+	}
+
+	// Extract the directory path from the full file path
+	noteDir := filepath.Dir(fullPath)
+
+	// Change to the notes directory before opening the editor
+	if err := os.Chdir(noteDir); err != nil {
+		return fmt.Errorf("failed to change directory to notes folder: %v", err)
+	}
+
+	// Use defer to ensure we change back to original directory even if there's an error
+	defer os.Chdir(originalDir)
+
+	// Get just the filename without the directory path
+	filename := filepath.Base(fullPath)
+
 	// Check if file exists before trying to initialize it
 	fileExists := false
-	_, err := os.Stat(fullPath)
+	_, err = os.Stat(filename)
 	if err == nil {
 		fileExists = true
 	}
@@ -406,13 +426,12 @@ func openInEditor(fullPath string, tags string) error {
 	// Only initialize the file if it's new
 	if !fileExists {
 		// Create a new file
-		file, err := os.Create(fullPath)
+		file, err := os.Create(filename)
 		if err != nil {
 			return fmt.Errorf("failed to create file: %v", err)
 		}
 
 		// Extract the title from filename (without extension)
-		filename := filepath.Base(fullPath)
 		title := strings.TrimSuffix(filename, ".md")
 		// Capitalize the first letter of the title
 		title = capitalizeFirstLetter(title)
@@ -430,8 +449,8 @@ func openInEditor(fullPath string, tags string) error {
 		file.Close()
 	}
 
-	// Open the file in the editor
-	cmd := exec.Command(editor, fullPath)
+	// Open the file in the editor (using just the filename since we're already in the right directory)
+	cmd := exec.Command(editor, filename)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

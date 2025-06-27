@@ -15,7 +15,7 @@
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
         pname = "snsm";
-        version = "0.6.0";
+        version = "0.9.0";
       in {
         packages.default = pkgs.buildGoModule {
           inherit pname version;
