@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -170,7 +171,7 @@ type model struct {
 
 func initialModel(notesDir string) model {
 	ti := textinput.New()
-	ti.Placeholder = "Enter filename (without .md extension)"
+	ti.Placeholder = "Enter filename (without .md extension), use %t for timestamp"
 	ti.Focus()
 	ti.CharLimit = 100
 	ti.Width = 40
@@ -269,6 +270,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Create and open the new file
 				filename := m.textInput.Value()
 				if filename != "" {
+					// Replace timestamp placeholder with current date
+					filename = expandTimestamp(filename)
+
 					// Remove any .md extension the user might have added
 					filename = strings.TrimSuffix(filename, ".md")
 					// Always add .md extension
@@ -310,6 +314,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// expandTimestamp replaces %t in the filename with the current date in YYYY-MM-DD format
+func expandTimestamp(filename string) string {
+	if strings.Contains(filename, "%t") {
+		today := time.Now().Format("2006-01-02")
+		return strings.ReplaceAll(filename, "%t", today)
+	}
+	return filename
+}
+
 func (m model) View() string {
 	if m.quitting {
 		return quitTextStyle.Render("Bye!")
@@ -325,7 +338,7 @@ func (m model) View() string {
 	case modeInput:
 		return fmt.Sprintf(
 			"\n\n  %s\n\n  %s\n\n",
-			"Enter the filename for your new note (without .md extension):",
+			"Enter the filename for your new note (use %t for today's date):",
 			m.textInput.View(),
 		) + "  (press ESC to cancel)"
 	case modeTagInput:
