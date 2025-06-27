@@ -1,6 +1,5 @@
-// +readme 
-# Simple notes
-do you just need a note system that is organized with tags? This is the solution.
+# snsm - Simple Notes for Simple Man
+I'm a simple man with simple need.
 
 # Usage
 just type `note` and enter the tags you're searching for. Selecting one will open it in your favorite `$EDITOR`. If you just enter a word followed by `.md` it will create that file for you and open it. It's just plain text files, you choose how you back it/sync it.

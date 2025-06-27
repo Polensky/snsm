@@ -1,5 +1,5 @@
 {
-  description = "Simple Notes - A tag-based note management system";
+  description = "snfsm - A simple tag-based note management system";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -14,7 +14,7 @@
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
-        pname = "simple-notes";
+        pname = "snsm";
         version = "0.6.0";
       in {
         packages.default = pkgs.buildGoModule {

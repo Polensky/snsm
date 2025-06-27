@@ -1,4 +1,4 @@
-module simple-notes
+module snsm
 
 go 1.21
 
