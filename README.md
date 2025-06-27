@@ -11,8 +11,9 @@ Just start `snsm` and enter the tags you're searching for. Selecting one will op
 - **Filtering**: Filter notes by both filename and tags
 - **Simple Storage**: Just plain text files, you choose how you back it/sync it
 
-### Nice to have
+### Nice to have in the future
 - **Deep Search**: When no matches are found by tags, it will search in file contents
+- **CLI options**: to be able to create new tagged note directly with a cli.
 
 ### Tagging
 To tag a document just add them on the first line of your document like so:
